@@ -977,15 +977,10 @@ class Metadata_BC(mrDataFileDsc):
                     qre_name = self.get_qre_loop(pd.Series([qre_name]))
                     for i in qre_name.tolist():
                         #Filter DATA tại câu cần check
-                        data_check = self.df.loc[
-                            self.df[i].notnull() & 
-                            (self.df[i].astype(str).str.strip() != "") & 
-                            (self.df[i].astype(str).str.upper() != "NULL"),
-                            i
-                        ]
+                        data_check = self.df[i]
                         if not data_check.empty:
                             for id in data_check.index.tolist():
-                                if id == "2000817":
+                                if id == "R_937BqmzQ20PHpfw":
                                     a=0
                                 current_answers = self.df.at[id, i]
                                 current_answers = self.convert_value(current_answers)
@@ -1025,12 +1020,7 @@ class Metadata_BC(mrDataFileDsc):
                     qre_name = self.get_qre_loop(pd.Series([qre_name]))
                     for i in qre_name.tolist():
                         #Filter DATA tại câu cần check
-                        data_check = self.df.loc[
-                            self.df[i].notnull() & 
-                            (self.df[i].astype(str).str.strip() != "") & 
-                            (self.df[i].astype(str).str.upper() != "NULL"),
-                            i
-                        ]
+                        data_check = self.df[i]
                         if not data_check.empty:
                             for id in data_check.index.tolist():
                                 if id == "2035833":
