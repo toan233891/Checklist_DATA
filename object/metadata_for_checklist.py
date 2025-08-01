@@ -412,6 +412,11 @@ class Metadata_BC(mrDataFileDsc):
         return list
 
     def convert_value(self, value):
+        if isinstance(value, str):
+            pass
+        else:
+            value = int(value)
+            
         if (pd.notnull(value) and (isinstance(value, str) and value.strip() != "" or isinstance(value, (int, float)) )):
             if isinstance(value, str):
                 value = value.replace(" ","").replace("!","").replace(">","").replace("<","").split(',')
