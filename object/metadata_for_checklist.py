@@ -177,12 +177,12 @@ class Metadata_BC(mrDataFileDsc):
                         results.append(result_str)
                         messagebox.showinfo("Thông báo [valcheck_checklist_import]", result_str)   
                         check = False          
-                    if pd.isnull(value_condition) or (isinstance(value_condition, str) and value_condition.strip() == ""):
-                        result_str = f"[Tại dòng: {row_excel}]: Kiểm tra câu hỏi {i} trong Check_list thuộc funtion: {df_excel.loc[index, 'Funtion']} bị thiếu giá trị điều kiện nhưng lại có tên câu điều kiện là {question_condition} "
-                        print(result_str)
-                        results.append(result_str)
-                        messagebox.showinfo("Thông báo [valcheck_checklist_import]", result_str)    
-                        check = False  
+                    # if pd.isnull(value_condition) or (isinstance(value_condition, str) and value_condition.strip() == ""):
+                    #     result_str = f"[Tại dòng: {row_excel}]: Kiểm tra câu hỏi {i} trong Check_list thuộc funtion: {df_excel.loc[index, 'Funtion']} bị thiếu giá trị điều kiện nhưng lại có tên câu điều kiện là {question_condition} "
+                    #     print(result_str)
+                    #     results.append(result_str)
+                    #     messagebox.showinfo("Thông báo [valcheck_checklist_import]", result_str)    
+                    #     check = False  
 
         Question_Check = df_excel.loc[(df_excel["Funtion"] == "Valcheck_equal") | (df_excel["Funtion"] == "Valcheck_Not_equal") | (df_excel["Funtion"] == "Create_Compare_num") ,"Question Check"]
         if not Question_Check.empty:                 
@@ -432,7 +432,8 @@ class Metadata_BC(mrDataFileDsc):
                     for qre_loop in self.df.columns:
                         try:
                             if LoopName in qre_loop:
-                                if LoopChidren == qre_loop.split(".")[-1]:
+                                # if LoopChidren == qre_loop.split(".")[-1]:
+                                if qre_loop.endswith(LoopChidren):
                                     Qre = pd.concat([Qre, pd.Series([qre_loop])], ignore_index=True)
                         except:
                             break
@@ -998,6 +999,26 @@ class Metadata_BC(mrDataFileDsc):
                                     value_condition = df_excel.loc[index, 'VALUE_1']
 
                                 value_condition = self.convert_value(value_condition)
+                                DK_Check = False
+                                DK = []
+                                if (
+                                    (isinstance(df_excel.loc[index, 'QRE_1'], (pd.Series, np.ndarray)) and pd.notnull(df_excel.loc[index, 'QRE_1']).all() and all(str(x).strip() != "" for x in df_excel.loc[index, 'QRE_1']))
+                                    or (isinstance(df_excel.loc[index, 'QRE_1'], str) and df_excel.loc[index, 'QRE_1'].strip() != "")
+                                    or (pd.notnull(df_excel.loc[index, 'QRE_1']) and not isinstance(df_excel.loc[index, 'QRE_1'], str))
+                                ) and (
+                                    (isinstance(df_excel.loc[index, 'VALUE_1'], (pd.Series, np.ndarray)) and pd.notnull(df_excel.loc[index, 'VALUE_1']).all() and all(str(x).strip() != "" for x in df_excel.loc[index, 'VALUE_1']))
+                                    or (isinstance(df_excel.loc[index, 'VALUE_1'], str) and df_excel.loc[index, 'VALUE_1'].strip() != "")
+                                    or (pd.notnull(df_excel.loc[index, 'VALUE_1']) and not isinstance(df_excel.loc[index, 'VALUE_1'], str))
+                                ):
+                                    if pd.notnull(df_excel.loc[index, 'VALUE_1']) and df_excel.loc[index, 'VALUE_1'] != '':
+                                        for x in df_excel.loc[index, 'VALUE_1'].split(','):
+                                            if "DK" in x.upper(): 
+                                                DK.append(int(x.replace("DK_","")))
+                                                DK_Check = True
+
+                                if DK_Check == True: #Xử lý các câu có note DK trong điều kiện
+                                    value_condition = self.diff_lists(value_condition, DK)
+
                                 if set(current_answers) != set(value_condition):
                                     if Name_condition == None:
                                         results = f"{id}: {i}: {current_answers}  Không giống {value_condition}"
@@ -1039,7 +1060,29 @@ class Metadata_BC(mrDataFileDsc):
                                         value_condition = self.df.at[id, value_condition]                                            
                                 else:
                                     value_condition = df_excel.loc[index, 'VALUE_1']
+
                                 value_condition = self.convert_value(value_condition)
+
+                                DK_Check = False
+                                DK = []
+                                if (
+                                    (isinstance(df_excel.loc[index, 'QRE_1'], (pd.Series, np.ndarray)) and pd.notnull(df_excel.loc[index, 'QRE_1']).all() and all(str(x).strip() != "" for x in df_excel.loc[index, 'QRE_1']))
+                                    or (isinstance(df_excel.loc[index, 'QRE_1'], str) and df_excel.loc[index, 'QRE_1'].strip() != "")
+                                    or (pd.notnull(df_excel.loc[index, 'QRE_1']) and not isinstance(df_excel.loc[index, 'QRE_1'], str))
+                                ) and (
+                                    (isinstance(df_excel.loc[index, 'VALUE_1'], (pd.Series, np.ndarray)) and pd.notnull(df_excel.loc[index, 'VALUE_1']).all() and all(str(x).strip() != "" for x in df_excel.loc[index, 'VALUE_1']))
+                                    or (isinstance(df_excel.loc[index, 'VALUE_1'], str) and df_excel.loc[index, 'VALUE_1'].strip() != "")
+                                    or (pd.notnull(df_excel.loc[index, 'VALUE_1']) and not isinstance(df_excel.loc[index, 'VALUE_1'], str))
+                                ):
+                                    if pd.notnull(df_excel.loc[index, 'VALUE_1']) and df_excel.loc[index, 'VALUE_1'] != '':
+                                        for x in df_excel.loc[index, 'VALUE_1'].split(','):
+                                            if "DK" in x.upper(): 
+                                                DK.append(int(x.replace("DK_","")))
+                                                DK_Check = True
+
+                                if DK_Check == True: #Xử lý các câu có note DK trong điều kiện
+                                    value_condition = self.diff_lists(value_condition, DK)
+                                
                                 arr_intersection = set(current_answers).intersection(set(value_condition))
                                 if len(arr_intersection)>0:
                                     result_str = f"{id}: {i}: {current_answers}  có code giống {Name_condition}: {value_condition}"
@@ -1119,7 +1162,7 @@ class Metadata_BC(mrDataFileDsc):
                                 #get giá trị của câu filter và đưa ra thành list
                                 current_answers = Answer
                                 current_answers = self.convert_value(current_answers)
-                                if id == "2055281":
+                                if id == 1096:
                                     a=0
                                 question_condition = df_excel.loc[index, 'QRE_1']
                                 Name_condition = None
@@ -1148,9 +1191,9 @@ class Metadata_BC(mrDataFileDsc):
                                         for item in current_answers:
                                             if item not in question_condition: #Kiểm tra xem có code nào không thuộc trong list code filter không
                                                 if Name_condition == None:
-                                                    result_str = f"{id}: {i}: {current_answers} KHÔNG filter {df_excel.loc[index, 'QRE_1']} : {question_condition}"
+                                                    result_str = f"{id}: {i}: {current_answers} KHÔNG filter {df_excel.loc[index, 'QRE_1']} : {question_condition}: Thiếu code [{item}]"
                                                 else:
-                                                    result_str = f"{id}: {i}: {current_answers} KHÔNG filter {Name_condition}: {question_condition}"
+                                                    result_str = f"{id}: {i}: {current_answers} KHÔNG filter {Name_condition}: {question_condition}: Thiếu code [{item}]"
                                                 print(result_str)
                                                 results.append(result_str)                                        
                                 else:
@@ -1164,9 +1207,9 @@ class Metadata_BC(mrDataFileDsc):
                                     for item in current_answers:
                                         if item not in question_condition: #Kiểm tra xem có code nào không thuộc trong list code filter không
                                             if Name_condition == None:
-                                                result_str = f"{id}: {i}: {current_answers} KHÔNG filter {df_excel.loc[index, 'QRE_1']} : {question_condition}"
+                                                result_str = f"{id}: {i}: {current_answers} KHÔNG filter {df_excel.loc[index, 'QRE_1']} : {question_condition}: Thiếu code [{item}]"
                                             else:
-                                                result_str = f"{id}: {i}: {current_answers} KHÔNG filter {Name_condition}: {question_condition}"
+                                                result_str = f"{id}: {i}: {current_answers} KHÔNG filter {Name_condition}: {question_condition}: Thiếu code [{item}]"
                                             print(result_str)
                                             results.append(result_str)   
                 except Exception as e:
@@ -1259,12 +1302,29 @@ class Metadata_BC(mrDataFileDsc):
                     self.df[i] = ""
                     for x in list_Question_loop:
                         for j, row in self.df[x].items():
-                            if j == "2049767":
+                            if j == "2066397":
                                 a=0
                             if pd.notnull(row):
-                                matches = re.findall(r'\{_([^\}]+)\}', x)
-                                numbers = matches[-1] if matches else ""
-                                self.df.at[j,i] += numbers +"," #tạo ra 1 cột mới lấy giá trị iteration thỏa điều kiện nếu có giá trị khác null                
+                                # matches = re.findall(r'\{_([^\}]+)\}', x)
+                                # numbers = matches[-1] if matches else ""
+                                # self.df.at[j,i] += numbers +"," #tạo ra 1 cột mới lấy giá trị iteration thỏa điều kiện nếu có giá trị khác null                
+                                # Tìm vị trí [..] trong i
+                                idx_loop = [m.start() for m in re.finditer(r'\[\.\.\]', i)]
+                                # Tìm tất cả vị trí {___} trong x
+                                matches = list(re.finditer(r'\{_([^\}]+)\}', x))
+                                # Tìm vị trí [..] thứ mấy trong i
+                                idx_loop_num = 0
+                                pos = 0
+                                for m in re.finditer(r'\[\.\.\]|\[\{_[^\}]+\}\]', i):
+                                    if m.group() == '[..]':
+                                        break
+                                    idx_loop_num += 1
+                                # Lấy iteration tương ứng trong x
+                                if len(matches) > idx_loop_num:
+                                    numbers = matches[idx_loop_num].group(1)
+                                else:
+                                    numbers = ""
+                                self.df.at[j, i] += numbers + ","                    
                     self.df[i] = self.df[i].apply(
                         lambda x: ','.join(sorted(set(x.split(',')), key=lambda v: (v.isdigit(), int(v) if v.isdigit() else v)))
                     )                 
@@ -1298,7 +1358,7 @@ class Metadata_BC(mrDataFileDsc):
                         for id,Answer in zip(Data_check.index.tolist(),Data_check.tolist()):  
                             current_answers = self.df.at[id, i]
                             current_answers = self.convert_value(current_answers)
-                            if id == "2049767":
+                            if id == "2066397":
                                 a=0
                             Answer_list = Answer
                             Answer_list = self.convert_value(Answer_list)
