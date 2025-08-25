@@ -111,17 +111,18 @@ class Metadata_BC(mrDataFileDsc):
         if "InstanceID" in self.df.columns:
             instance_col = self.df["InstanceID"].copy()
             df_replace = self.df.drop(columns=["InstanceID"])
-            df_replace = df_replace.replace({"_": "","{": "","}": ""}, regex=True)
+            df_replace = df_replace.replace({"{_": "",",_":",","{": "","}": ""}, regex=True)
             df_replace["InstanceID"] = instance_col
             self.df = df_replace
         else:
-            self.df = self.df.replace({"_": "","{": "","}": ""}, regex=True)
+            self.df = self.df.replace({"{_": "",",_":",","{": "","}": ""}, regex=True)
+            # self.df = self.df.replace({"_": "","{": "","}": ""}, regex=True)
 
         self.closeMDM()
         self.closeDataSource()
         
         return self.df
-       
+
     def valcheck_checklist_import(self,df_excel):
         results = []
         # Hiển thị popup thông báo
@@ -443,7 +444,23 @@ class Metadata_BC(mrDataFileDsc):
             except Exception as e:
                 print(f"[get_qre_loop]: Lỗi xử lý điều kiện tại câu {i}: {e}")              
         return Qre
-        
+
+    def get_iteration_index_loop(self,question, column_name):
+        # get giá trị iteration trong column_name tương ứng với vị trí [..] trong question_pattern.
+        # Tìm tất cả vị trí {_} trong question
+        matches = list(re.finditer(r'\{_([^\}]+)\}', column_name))
+        # Tìm vị trí [..] thứ mấy trong column_name
+        idx_loop_num = 0
+        for m in re.finditer(r'\[\.\.\]|\[\{_[^\}]+\}\]', question):
+            if m.group() == '[..]':
+                break
+            idx_loop_num += 1
+        # Lấy iteration tương ứng trong column_name
+        if len(matches) > idx_loop_num:
+            return matches[idx_loop_num].group(1)
+        else:
+            return ""
+
     def Create_pushdata(self, df_excel, Question_Check,index):
         results = []
         if len(Question_Check) > 0:
@@ -610,18 +627,18 @@ class Metadata_BC(mrDataFileDsc):
                             if "!" in df_excel.loc[index, 'VALUE_1']:
                                 # Nếu có ký tự "!" trong giá trị điều kiện, kiểm tra xem giá trị của câu hỏi có nằm ngoài danh sách giá trị của câu điều kiện không
                                 if len(arr_intersection) <= 0:
-                                    numbers = ','.join(re.findall(r'\{_([^\}]+)\}', x))
-                                    self.df.at[j,Question_Check] += numbers +","
+                                    numbers = self.get_iteration_index_loop(Question_Check, x)
+                                    self.df.at[j, Question_Check] += numbers + ","                             
                             else:
                                 # Nếu không có ký tự "!" trong giá trị điều kiện, kiểm tra xem giá trị của câu hỏi có nằm trong danh sách giá trị của câu điều kiện không
                                 if len(arr_intersection) > 0:
-                                    numbers = ','.join(re.findall(r'\{_([^\}]+)\}', x))
-                                    self.df.at[j,Question_Check] += numbers +"," 
+                                    numbers = self.get_iteration_index_loop(Question_Check, x)
+                                    self.df.at[j, Question_Check] += numbers + ","                                    
                         else:
                             # Nếu giá trị điều kiện không phải là chuỗi, kiểm tra xem giá trị của câu hỏi có nằm trong danh sách giá trị của câu điều kiện không
                             if len(arr_intersection) > 0:
-                                numbers = ','.join(re.findall(r'\{_([^\}]+)\}', x))
-                                self.df.at[j,Question_Check] += numbers +","            
+                                numbers = self.get_iteration_index_loop(Question_Check, x)
+                                self.df.at[j, Question_Check] += numbers + ","                              #            
                 
                 self.df[Question_Check] = self.df[Question_Check].apply(
                     lambda x: ','.join(sorted(set(x.split(',')), key=lambda v: (v.isdigit(), int(v) if v.isdigit() else v)))
@@ -775,6 +792,7 @@ class Metadata_BC(mrDataFileDsc):
         if not Question_Check.empty:
             for index, qre_name in zip(Question_Check.index.tolist(),Question_Check.tolist()):
                 try:
+                    original_qre_name = qre_name
                     qre_name = self.get_qre_loop(pd.Series([qre_name]))
                     for i in qre_name.tolist():
                         data_check = self.df.loc[
@@ -795,10 +813,18 @@ class Metadata_BC(mrDataFileDsc):
                                 else:
                                     for qre in self.df.columns:
                                         if "[..]" in Current_Value:
-                                            iteration = ','.join(re.findall(r'\{_([^\}]+)\}', i))  
+                                            # iteration = ','.join(re.findall(r'\{_([^\}]+)\}', i))  
+                                            # Name_condition = Current_Value.replace("[..]", "[{_" + iteration + "}]")
+                                            # Current_Value = self.df.at[id, Name_condition]
+                                            # break
+                                            if "[..]" in original_qre_name:
+                                                iteration = self.get_iteration_index_loop(original_qre_name, data_check.name)                                              
+                                            else: 
+                                                iteration = ','.join(re.findall(r'\{_([^\}]+)\}', i))
                                             Name_condition = Current_Value.replace("[..]", "[{_" + iteration + "}]")
                                             Current_Value = self.df.at[id, Name_condition]
                                             break
+                                            
                                         if "!" in Current_Value:
                                             if qre in Current_Value.replace("!",""):
                                                 if len(qre) == len(Current_Value.replace("!","")):
@@ -913,7 +939,7 @@ class Metadata_BC(mrDataFileDsc):
                             break
 
                     Current_Value = self.convert_value(Current_Value)
-
+                    original_qre_name = qre_name
                     qre_name = self.get_qre_loop(pd.Series([qre_name]))
                     for i in qre_name.tolist():
                         #Filter DATA tại câu cần check
@@ -931,7 +957,11 @@ class Metadata_BC(mrDataFileDsc):
                                 #Get các điều kiện và giá trị của điều kiện ở file excel checklist
                                 conditions = []
                                 conditions = self.get_conditions(df_excel, index)                                    
-                                iteration = ','.join(re.findall(r'\{_([^\}]+)\}', i))    
+                                # iteration = ','.join(re.findall(r'\{_([^\}]+)\}', i))    
+                                if "[..]" in original_qre_name:
+                                    iteration = self.get_iteration_index_loop(original_qre_name, data_check.name)                                              
+                                else: 
+                                    iteration = ','.join(re.findall(r'\{_([^\}]+)\}', i))                                
                                 for j in range(len(conditions)):
                                     if "[..]" in conditions[j][0]:
                                         # Tạo tuple mới với phần tử đầu đã thay đổi
@@ -975,13 +1005,14 @@ class Metadata_BC(mrDataFileDsc):
         if not Question_Check.empty:
             for index, qre_name in zip(Question_Check.index.tolist(),Question_Check.tolist()):
                 try:
+                    original_qre_name = qre_name
                     qre_name = self.get_qre_loop(pd.Series([qre_name]))
                     for i in qre_name.tolist():
                         #Filter DATA tại câu cần check
                         data_check = self.df[i]
                         if not data_check.empty:
                             for id in data_check.index.tolist():
-                                if id == "R_937BqmzQ20PHpfw":
+                                if id == "2066903":
                                     a=0
                                 current_answers = self.df.at[id, i]
                                 current_answers = self.convert_value(current_answers)
@@ -990,9 +1021,16 @@ class Metadata_BC(mrDataFileDsc):
                                 Name_condition = None
                                 if (pd.notnull(value_condition) or (isinstance(value_condition, str) and value_condition.strip() != "")):
                                     if "[..]" in value_condition:
-                                        iteration = ','.join(re.findall(r'\{_([^\}]+)\}', i))  
-                                        Name_condition = value_condition.replace("[..]", "[{_" + iteration + "}]") 
+                                        # iteration = ','.join(re.findall(r'\{_([^\}]+)\}', i))  
+                                        # Name_condition = value_condition.replace("[..]", "[{_" + iteration + "}]") 
+                                        # value_condition = self.df.at[id, Name_condition]
+                                        if "[..]" in original_qre_name:
+                                            iteration = self.get_iteration_index_loop(original_qre_name, data_check.name)                                              
+                                        else: 
+                                            iteration = ','.join(re.findall(r'\{_([^\}]+)\}', i))
+                                        Name_condition = value_condition.replace("[..]", "[{_" + iteration + "}]")
                                         value_condition = self.df.at[id, Name_condition]
+
                                     else:  
                                         value_condition = self.df.at[id, value_condition]
                                 else:
@@ -1010,15 +1048,16 @@ class Metadata_BC(mrDataFileDsc):
                                     or (isinstance(df_excel.loc[index, 'VALUE_1'], str) and df_excel.loc[index, 'VALUE_1'].strip() != "")
                                     or (pd.notnull(df_excel.loc[index, 'VALUE_1']) and not isinstance(df_excel.loc[index, 'VALUE_1'], str))
                                 ):
-                                    if pd.notnull(df_excel.loc[index, 'VALUE_1']) and df_excel.loc[index, 'VALUE_1'] != '':
-                                        for x in df_excel.loc[index, 'VALUE_1'].split(','):
-                                            if "DK" in x.upper(): 
-                                                DK.append(int(x.replace("DK_","")))
-                                                DK_Check = True
+                                    for x in df_excel.loc[index, 'VALUE_1'].split(','):
+                                        if "DK" in x.upper(): 
+                                            DK.append(int(x.replace("DK_","")))
+                                            DK_Check = True
 
                                 if DK_Check == True: #Xử lý các câu có note DK trong điều kiện
                                     value_condition = self.diff_lists(value_condition, DK)
-
+                                    if value_condition == []:
+                                        value_condition = ['NULL']
+                                
                                 if set(current_answers) != set(value_condition):
                                     if Name_condition == None:
                                         results = f"{id}: {i}: {current_answers}  Không giống {value_condition}"
@@ -1038,6 +1077,7 @@ class Metadata_BC(mrDataFileDsc):
         if not Question_Check.empty:
             for index, qre_name in zip(Question_Check.index.tolist(),Question_Check.tolist()):
                 try:
+                    original_qre_name = qre_name
                     qre_name = self.get_qre_loop(pd.Series([qre_name]))
                     for i in qre_name.tolist():
                         #Filter DATA tại câu cần check
@@ -1053,9 +1093,15 @@ class Metadata_BC(mrDataFileDsc):
                                 Name_condition = None
                                 if (pd.notnull(value_condition) or (isinstance(value_condition, str) and value_condition.strip() != "")):
                                     if "[..]" in value_condition:
-                                        iteration = ','.join(re.findall(r'\{_([^\}]+)\}', i))  
-                                        Name_condition = value_condition.replace("[..]", "[{_" + iteration + "}]") 
-                                        value_condition = self.df.at[id, Name_condition]   
+                                        # iteration = ','.join(re.findall(r'\{_([^\}]+)\}', i))  
+                                        # Name_condition = value_condition.replace("[..]", "[{_" + iteration + "}]") 
+                                        # value_condition = self.df.at[id, Name_condition]   
+                                        if "[..]" in original_qre_name:
+                                            iteration = self.get_iteration_index_loop(original_qre_name, data_check.name)                                              
+                                        else: 
+                                            iteration = ','.join(re.findall(r'\{_([^\}]+)\}', i))
+                                        Name_condition = value_condition.replace("[..]", "[{_" + iteration + "}]")
+                                        value_condition = self.df.at[id, Name_condition]                                        
                                     else:  
                                         value_condition = self.df.at[id, value_condition]                                            
                                 else:
@@ -1074,15 +1120,15 @@ class Metadata_BC(mrDataFileDsc):
                                     or (isinstance(df_excel.loc[index, 'VALUE_1'], str) and df_excel.loc[index, 'VALUE_1'].strip() != "")
                                     or (pd.notnull(df_excel.loc[index, 'VALUE_1']) and not isinstance(df_excel.loc[index, 'VALUE_1'], str))
                                 ):
-                                    if pd.notnull(df_excel.loc[index, 'VALUE_1']) and df_excel.loc[index, 'VALUE_1'] != '':
-                                        for x in df_excel.loc[index, 'VALUE_1'].split(','):
-                                            if "DK" in x.upper(): 
-                                                DK.append(int(x.replace("DK_","")))
-                                                DK_Check = True
+                                    for x in df_excel.loc[index, 'VALUE_1'].split(','):
+                                        if "DK" in x.upper(): 
+                                            DK.append(int(x.replace("DK_","")))
+                                            DK_Check = True
 
                                 if DK_Check == True: #Xử lý các câu có note DK trong điều kiện
                                     value_condition = self.diff_lists(value_condition, DK)
-                                
+                                    if value_condition == []:
+                                        value_condition = ['NULL']
                                 arr_intersection = set(current_answers).intersection(set(value_condition))
                                 if len(arr_intersection)>0:
                                     result_str = f"{id}: {i}: {current_answers}  có code giống {Name_condition}: {value_condition}"
@@ -1147,6 +1193,8 @@ class Metadata_BC(mrDataFileDsc):
                             if "DK" in x.upper(): #Kiểm tra trong câu được filter có code loại trừ 98, 99 không thông qua "DK"
                                 DK.append(int(x.replace("DK_","")))
                                 DK_Check = True
+                    
+                    original_qre_name = qre_name
 
                     qre_name = self.get_qre_loop(pd.Series([qre_name]))
                     for i in qre_name.tolist():
@@ -1162,13 +1210,16 @@ class Metadata_BC(mrDataFileDsc):
                                 #get giá trị của câu filter và đưa ra thành list
                                 current_answers = Answer
                                 current_answers = self.convert_value(current_answers)
-                                if id == 1096:
+                                if id == "R_4OixvlvaFfmUUv3":
                                     a=0
                                 question_condition = df_excel.loc[index, 'QRE_1']
                                 Name_condition = None
                                 for qre in self.df.columns:
                                     if "[..]" in question_condition:
-                                        iteration = ','.join(re.findall(r'\{_([^\}]+)\}', i))  
+                                        if "[..]" in original_qre_name:
+                                            iteration = self.get_iteration_index_loop(original_qre_name, Data_check.name)                                              
+                                        else: 
+                                            iteration = ','.join(re.findall(r'\{_([^\}]+)\}', i))
                                         Name_condition = question_condition.replace("[..]", "[{_" + iteration + "}]")
                                         question_condition = self.df.at[id, Name_condition]
                                         break
@@ -1180,7 +1231,16 @@ class Metadata_BC(mrDataFileDsc):
                                 question_condition = self.convert_value(question_condition)
                                 arr_intersection = set(current_answers).intersection(set(question_condition))
                                 if DK_Check == True: #Xử lý các câu có note DK trong điều kiện
-                                    if not any(item in current_answers for item in DK) and not any(item in question_condition for item in DK):
+                                    question_condition = self.diff_lists(question_condition, DK)
+                                    if question_condition == []:    
+                                        question_condition = ['NULL']
+                                    
+                                    current_answers = self.diff_lists(current_answers, DK)
+                                    if current_answers == []:
+                                        current_answers = ['NULL']
+
+                                    arr_intersection = set(current_answers).intersection(set(question_condition))
+                                    if current_answers != ['NULL']:
                                         if len(arr_intersection) == 0:
                                             if Name_condition == None:
                                                 result_str = f"{id}: {i}: {current_answers} KHÔNG filter {df_excel.loc[index, 'QRE_1']} : {question_condition}"
@@ -1229,9 +1289,9 @@ class Metadata_BC(mrDataFileDsc):
                     for x in list_Question_loop:
                         for j, row in self.df[x].items():
                             if row is not None:
-                                numbers = ','.join(re.findall(r'\{_(\d+)\}', x))
-                                self.df.at[j,i] += numbers +"," #tạo ra 1 cột mới lấy giá trị iteration thỏa điều kiện nếu có giá trị khác null                
-                    
+                                numbers = self.get_iteration_index_loop(i, x)
+                                self.df.at[j, i] += numbers + ","
+
                     self.df[i] = self.df[i].apply(lambda x: x.rstrip(',')) #Loại bỏ dấu phẩy bị dư ở cuối khi thực hiện get iteration trên
                     #Lọc data cho câu filter có giá trị khác null
                     Data_check = self.df.loc[
@@ -1305,26 +1365,8 @@ class Metadata_BC(mrDataFileDsc):
                             if j == "2066397":
                                 a=0
                             if pd.notnull(row):
-                                # matches = re.findall(r'\{_([^\}]+)\}', x)
-                                # numbers = matches[-1] if matches else ""
-                                # self.df.at[j,i] += numbers +"," #tạo ra 1 cột mới lấy giá trị iteration thỏa điều kiện nếu có giá trị khác null                
-                                # Tìm vị trí [..] trong i
-                                idx_loop = [m.start() for m in re.finditer(r'\[\.\.\]', i)]
-                                # Tìm tất cả vị trí {___} trong x
-                                matches = list(re.finditer(r'\{_([^\}]+)\}', x))
-                                # Tìm vị trí [..] thứ mấy trong i
-                                idx_loop_num = 0
-                                pos = 0
-                                for m in re.finditer(r'\[\.\.\]|\[\{_[^\}]+\}\]', i):
-                                    if m.group() == '[..]':
-                                        break
-                                    idx_loop_num += 1
-                                # Lấy iteration tương ứng trong x
-                                if len(matches) > idx_loop_num:
-                                    numbers = matches[idx_loop_num].group(1)
-                                else:
-                                    numbers = ""
-                                self.df.at[j, i] += numbers + ","                    
+                                numbers = self.get_iteration_index_loop(i, x)
+                                self.df.at[j, i] += numbers + ","                   
                     self.df[i] = self.df[i].apply(
                         lambda x: ','.join(sorted(set(x.split(',')), key=lambda v: (v.isdigit(), int(v) if v.isdigit() else v)))
                     )                 
@@ -1358,34 +1400,35 @@ class Metadata_BC(mrDataFileDsc):
                         for id,Answer in zip(Data_check.index.tolist(),Data_check.tolist()):  
                             current_answers = self.df.at[id, i]
                             current_answers = self.convert_value(current_answers)
-                            if id == "2066397":
+                            if id == "2072006":
                                 a=0
                             Answer_list = Answer
                             Answer_list = self.convert_value(Answer_list)
                             if DK_Check == True:
-                                if not any(item in Answer_list for item in DK):
-                                    if len(List_iteration_fix_for_filter) > 0:
-                                        arr_intersection = set(List_iteration_fix_for_filter).intersection(set(Answer_list))
-                                        if len(current_answers) != len(arr_intersection):
-                                            result_str = f"{id}: {i}: {current_answers} not filter {df_excel.loc[index, 'QRE_1']}: {arr_intersection}"
+                                Answer_list = self.diff_lists(Answer_list, DK)
+                                if Answer_list == []:   
+                                    Answer_list = ['NULL']
+                                if len(List_iteration_fix_for_filter) > 0:
+                                    arr_intersection = set(List_iteration_fix_for_filter).intersection(set(Answer_list))
+                                    if len(current_answers) != len(arr_intersection):
+                                        result_str = f"{id}: {i}: {current_answers} not filter {df_excel.loc[index, 'QRE_1']}: {arr_intersection}"
+                                        print(result_str)
+                                        results.append(result_str)
+                                    for item in current_answers:
+                                        if item not in arr_intersection:
+                                            result_str = f"{id}: {i}: have iteration {item} not in {df_excel.loc[index, 'QRE_1']}: {arr_intersection}"
                                             print(result_str)
-                                            results.append(result_str)
-                                        for item in current_answers:
-                                            if item not in arr_intersection:
-                                                result_str = f"{id}: {i}: have iteration {item} not in {df_excel.loc[index, 'QRE_1']}: {arr_intersection}"
-                                                print(result_str)
-                                                results.append(result_str)     
-                                    else:
-                                        if len(current_answers) != len(Answer_list): #Kiểm tra số lượng iteration khác null tại câu được filter và số lượng code tại câu filter
-                                            result_str = f"{id}: {i}: {current_answers} not filter {df_excel.loc[index, 'QRE_1']}: {len(Answer_list)}"
+                                            results.append(result_str)     
+                                else:
+                                    if len(current_answers) != len(Answer_list): #Kiểm tra số lượng iteration khác null tại câu được filter và số lượng code tại câu filter
+                                        result_str = f"{id}: {i}: {current_answers} not filter {df_excel.loc[index, 'QRE_1']}: {len(Answer_list)}"
+                                        print(result_str)
+                                        results.append(result_str)    
+                                    for item in current_answers:
+                                        if item not in Answer_list:
+                                            result_str = f"{id}: {i}: have iteration {item} not in {df_excel.loc[index, 'QRE_1']}: {Answer_list}"
                                             print(result_str)
-                                            results.append(result_str)    
-                                        for item in current_answers:
-                                            if item not in Answer_list:
-                                                result_str = f"{id}: {i}: have iteration {item} not in {df_excel.loc[index, 'QRE_1']}: {Answer_list}"
-                                                print(result_str)
-                                                results.append(result_str)                                          
-                                                            
+                                            results.append(result_str)                                                                       
                             else:
                                 if len(List_iteration_fix_for_filter) > 0:
                                     arr_intersection = set(List_iteration_fix_for_filter).intersection(set(Answer_list))
@@ -1422,12 +1465,45 @@ class Metadata_BC(mrDataFileDsc):
                     if not miss_data.empty:
                         for id,Answer in zip(miss_data.index.tolist(),miss_data.tolist()): 
                             Answer_list = self.convert_value(Answer)
-                            Answer_filter = self.convert_value(self.df.at[id, df_excel.loc[index, 'QRE_1']])
-                            for item in Answer_list:
-                                if item not in Answer_filter:
-                                    result_str = f"{id}: {i}: iteration {item} have DATA, BUT {item} not in {df_excel.loc[index, 'QRE_1']}: {Answer_filter}"
-                                    print(result_str)
-                                    results.append(result_str)  
+                            Answer_filter = self.convert_value(self.df.at[id, df_excel.loc[index, 'QRE_1']])          
+                            if id == "2072006":
+                                a=0                                              
+                            if DK_Check == True:
+                                if len(List_iteration_fix_for_filter) > 0:
+                                    Answer_filter = set(List_iteration_fix_for_filter).intersection(set(Answer_filter))
+                                    for item in Answer_list:
+                                        Answer_filter = self.diff_lists(Answer_filter.tolist(), DK)
+                                        if Answer_filter == []:
+                                            Answer_filter = ['NULL']
+                                        if item not in Answer_filter:
+                                            result_str = f"{id}: {i}: iteration {item} have DATA, BUT {item} not in {df_excel.loc[index, 'QRE_1']}: {Answer_filter}"
+                                            print(result_str)
+                                            results.append(result_str)  
+                                else:
+                                    for item in Answer_list:
+                                        Answer_filter = self.diff_lists(Answer_filter.tolist(), DK)
+                                        if Answer_filter == []:
+                                            Answer_filter = ['NULL']
+                                        if item not in Answer_filter:
+                                            result_str = f"{id}: {i}: iteration {item} have DATA, BUT {item} not in {df_excel.loc[index, 'QRE_1']}: {Answer_filter}"
+                                            print(result_str)
+                                            results.append(result_str)                                      
+                            else:
+                                if len(List_iteration_fix_for_filter) > 0:
+                                    Answer_filter = set(List_iteration_fix_for_filter).intersection(set(Answer_filter))
+                                    if len(Answer_filter) == 0:
+                                        Answer_filter = ['NULL']
+                                    for item in Answer_list:
+                                        if item not in Answer_filter:
+                                            result_str = f"{id}: {i}: iteration {item} have DATA, BUT {item} not in {df_excel.loc[index, 'QRE_1']}: {Answer_filter}"
+                                            print(result_str)
+                                            results.append(result_str)
+                                else:    
+                                    for item in Answer_list:
+                                        if item not in Answer_filter:
+                                            result_str = f"{id}: {i}: iteration {item} have DATA, BUT {item} not in {df_excel.loc[index, 'QRE_1']}: {Answer_filter}"
+                                            print(result_str)
+                                            results.append(result_str)                                 
                 except Exception as e:
                     print(f"[Valcheck_filterbycat]: Lỗi xử lý điều kiện tại câu {i}: {e}")   
         return results          
@@ -1440,6 +1516,7 @@ class Metadata_BC(mrDataFileDsc):
         if not Question_Check.empty:
             for index, qre_name in zip(Question_Check.index.tolist(),Question_Check.tolist()):
                 try:
+                    original_qre_name = qre_name
                     qre_name = self.get_qre_loop(pd.Series([qre_name]))
 
                     for i in qre_name.tolist():
@@ -1447,7 +1524,11 @@ class Metadata_BC(mrDataFileDsc):
                         conditions = []
                         conditions = self.get_conditions(df_excel, index)
 
-                        iteration = ','.join(re.findall(r'\{_([^\}]+)\}', i))    
+                        # iteration = ','.join(re.findall(r'\{_([^\}]+)\}', i))   
+                        if "[..]" in original_qre_name:
+                            iteration = self.get_iteration_index_loop(original_qre_name, i)                                              
+                        else: 
+                            iteration = ','.join(re.findall(r'\{_([^\}]+)\}', i))                        #  
                         for j in range(len(conditions)):
                             if "[..]" in conditions[j][0]:
                                 # Tạo tuple mới với phần tử đầu đã thay đổi
