@@ -1466,13 +1466,15 @@ class Metadata_BC(mrDataFileDsc):
                         for id,Answer in zip(miss_data.index.tolist(),miss_data.tolist()): 
                             Answer_list = self.convert_value(Answer)
                             Answer_filter = self.convert_value(self.df.at[id, df_excel.loc[index, 'QRE_1']])          
-                            if id == "2072006":
+                            if id == "2043261":
                                 a=0                                              
                             if DK_Check == True:
                                 if len(List_iteration_fix_for_filter) > 0:
                                     Answer_filter = set(List_iteration_fix_for_filter).intersection(set(Answer_filter))
                                     for item in Answer_list:
-                                        Answer_filter = self.diff_lists(Answer_filter.tolist(), DK)
+                                        if not isinstance(Answer_filter, list):
+                                            Answer_filter = [Answer_filter]
+                                        Answer_filter = self.diff_lists(Answer_filter, DK)
                                         if Answer_filter == []:
                                             Answer_filter = ['NULL']
                                         if item not in Answer_filter:
@@ -1481,7 +1483,9 @@ class Metadata_BC(mrDataFileDsc):
                                             results.append(result_str)  
                                 else:
                                     for item in Answer_list:
-                                        Answer_filter = self.diff_lists(Answer_filter.tolist(), DK)
+                                        if not isinstance(Answer_filter, list):
+                                            Answer_filter = [Answer_filter]
+                                        Answer_filter = self.diff_lists(Answer_filter, DK)
                                         if Answer_filter == []:
                                             Answer_filter = ['NULL']
                                         if item not in Answer_filter:
